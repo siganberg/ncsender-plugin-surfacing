@@ -4,7 +4,7 @@
  */
 
 export async function onLoad(ctx) {
-  ctx.log('Surfacing plugin loaded');
+  ctx.log('ToolBench plugin loaded');
 
   // Register the Surfacing tool in the Tools menu (client-only dialogs)
   ctx.registerToolMenu('Surfacing', async () => {
@@ -733,7 +733,7 @@ export async function onLoad(ctx) {
             const gcode = generateSurfacingGcode(params);
 
             // Save settings to server (in metric)
-            fetch('/api/plugins/com.ncsender.surfacing/settings', {
+            fetch('/api/plugins/com.ncsender.toolbench/settings', {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(settingsToSave)
@@ -1426,7 +1426,7 @@ export async function onLoad(ctx) {
             const gcode = generateJointerGcode(params);
 
             // Save settings
-            fetch('/api/plugins/com.ncsender.surfacing/settings', {
+            fetch('/api/plugins/com.ncsender.toolbench/settings', {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(settingsToSave)
@@ -1453,6 +1453,834 @@ export async function onLoad(ctx) {
               }
             } catch (error) {
               alert('Error uploading G-code file: ' + error.message);
+            }
+          });
+        })();
+      </script>
+    `);
+  }, { clientOnly: true }); // Only show to the client who clicked
+
+  // Register the Boring tool in the Tools menu (client-only dialogs)
+  ctx.registerToolMenu('Boring', async () => {
+    ctx.log('Boring tool clicked');
+
+    // Get app settings to determine units
+    const appSettings = ctx.getAppSettings();
+    const unitsPreference = appSettings.unitsPreference || 'metric';
+    const distanceUnit = unitsPreference === 'imperial' ? 'in' : 'mm';
+    const isImperial = unitsPreference === 'imperial';
+
+    // Conversion functions
+    const convertToDisplay = (metricValue) => {
+      if (isImperial) {
+        return (metricValue / 25.4).toFixed(4);
+      }
+      return metricValue;
+    };
+
+    const convertToMetric = (displayValue) => {
+      if (isImperial) {
+        return displayValue * 25.4;
+      }
+      return displayValue;
+    };
+
+    // Get saved settings for Boring (separate from other tools)
+    const savedBoringSettings = ctx.getSettings()?.boring || {};
+
+    const settings = {
+      xCount: savedBoringSettings.xCount ?? 1,
+      xDistance: convertToDisplay(savedBoringSettings.xDistance ?? 50),
+      yCount: savedBoringSettings.yCount ?? 1,
+      yDistance: convertToDisplay(savedBoringSettings.yDistance ?? 50),
+      diameter: convertToDisplay(savedBoringSettings.diameter ?? 10),
+      depth: convertToDisplay(savedBoringSettings.depth ?? 5),
+      cutType: savedBoringSettings.cutType ?? 'inner',
+      toolDiameter: convertToDisplay(savedBoringSettings.toolDiameter ?? 3.17),
+      pitch: convertToDisplay(savedBoringSettings.pitch ?? 2),
+      feedRate: convertToDisplay(savedBoringSettings.feedRate ?? 300),
+      spindleRPM: savedBoringSettings.spindleRPM ?? 18000,
+      spindleDelay: savedBoringSettings.spindleDelay ?? 6,
+      mistM7: savedBoringSettings.mistM7 ?? false,
+      floodM8: savedBoringSettings.floodM8 ?? false
+    };
+
+    ctx.showDialog('Boring Operation', `
+      <style>
+        .boring-layout {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          max-width: 1000px;
+          margin: 0 auto;
+        }
+
+        .boring-content {
+          flex: 1;
+          overflow-y: auto;
+          padding: 24px;
+        }
+
+        .form-cards-container {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 20px;
+        }
+
+        .form-card {
+          margin-bottom: 0;
+        }
+
+        .plugin-dialog-footer {
+          border-top: 1px solid var(--color-border);
+          padding: 16px 24px;
+        }
+
+        .button-group {
+          display: flex;
+          gap: 12px;
+          justify-content: center;
+        }
+
+        .btn {
+          padding: 8px 16px;
+          border-radius: var(--radius-small);
+          border: 1px solid var(--color-border);
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .btn-secondary {
+          background: var(--color-surface);
+          color: var(--color-text-primary);
+        }
+
+        .btn-secondary:hover {
+          background: var(--color-surface-hover);
+        }
+
+        .btn-primary {
+          background: var(--color-primary);
+          color: white;
+          border-color: var(--color-primary);
+        }
+
+        .btn-primary:hover {
+          background: var(--color-primary-hover);
+        }
+
+        .form-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+          margin-bottom: 16px;
+        }
+
+        .form-group {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .form-group label {
+          font-weight: 500;
+          color: var(--color-text-primary);
+          font-size: 0.9rem;
+        }
+
+        .form-group input {
+          padding: 8px 12px;
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-small);
+          background: var(--color-surface);
+          color: var(--color-text-primary);
+          font-size: 0.9rem;
+        }
+
+        .form-group input:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          background: var(--color-surface-muted);
+        }
+
+        .cut-type-label {
+          font-weight: 500;
+          color: var(--color-text-primary);
+          font-size: 0.9rem;
+        }
+
+        .cut-type-toggle {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-top: 6px;
+        }
+
+        .toggle-switch {
+          position: relative;
+          display: inline-block;
+          width: 50px;
+          height: 26px;
+        }
+
+        .toggle-switch input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+        }
+
+        .toggle-slider {
+          position: absolute;
+          cursor: pointer;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: var(--color-surface-muted);
+          border: 1px solid var(--color-border);
+          transition: 0.3s;
+          border-radius: 26px;
+        }
+
+        .toggle-slider:before {
+          position: absolute;
+          content: "";
+          height: 18px;
+          width: 18px;
+          left: 3px;
+          bottom: 3px;
+          background-color: var(--color-text-primary);
+          transition: 0.3s;
+          border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+          background-color: var(--color-accent);
+          border-color: var(--color-accent);
+        }
+
+        input:checked + .toggle-slider:before {
+          transform: translateX(24px);
+          background-color: white;
+        }
+
+        .cut-type-labels {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 0.85rem;
+          color: var(--color-text-muted);
+        }
+
+        .cut-type-labels .active {
+          color: var(--color-text-primary);
+          font-weight: 500;
+        }
+
+        .form-row.coolant-row {
+          grid-template-columns: 1fr;
+          display: flex;
+          align-items: center;
+          gap: 0;
+        }
+
+        .coolant-label {
+          font-weight: 500;
+          color: var(--color-text-primary);
+          font-size: 0.9rem;
+          min-width: 80px;
+        }
+
+        .coolant-controls {
+          display: flex;
+          gap: 20px;
+          flex: 1;
+        }
+
+        .toggle-group {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .toggle-group label:first-child {
+          font-size: 0.85rem;
+          color: var(--color-text-secondary);
+        }
+
+        .form-card {
+          background: var(--color-surface-secondary);
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-medium);
+          padding: 20px;
+          margin-bottom: 20px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.15);
+        }
+
+        .form-card-title {
+          font-size: 1rem;
+          font-weight: 600;
+          color: var(--color-text-primary);
+          margin-bottom: 16px;
+          padding-bottom: 12px;
+          border-bottom: 1px solid var(--color-border);
+          text-align: center;
+        }
+      </style>
+
+      <div class="boring-layout">
+        <div class="boring-content">
+          <form id="boringForm" novalidate>
+            <div class="form-cards-container">
+              <div class="form-card">
+                <div class="form-card-title">Dimensions</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="xCount">X-Count</label>
+                  <input type="number" id="xCount" min="1" max="200" step="1" value="${settings.xCount}" required>
+                </div>
+                <div class="form-group">
+                  <label for="xDistance">X-Distance (${distanceUnit})</label>
+                  <input type="number" id="xDistance" min="0.1" step="0.1" value="${settings.xDistance}" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="yCount">Y-Count</label>
+                  <input type="number" id="yCount" min="1" max="200" step="1" value="${settings.yCount}" required>
+                </div>
+                <div class="form-group">
+                  <label for="yDistance">Y-Distance (${distanceUnit})</label>
+                  <input type="number" id="yDistance" min="0.1" step="0.1" value="${settings.yDistance}" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="cut-type-label">Cut</label>
+                  <div class="cut-type-toggle">
+                    <div class="cut-type-labels">
+                      <span id="innerLabel" class="${settings.cutType === 'inner' ? 'active' : ''}">Inner</span>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="cutType" ${settings.cutType === 'outer' ? 'checked' : ''}>
+                      <span class="toggle-slider"></span>
+                    </label>
+                    <div class="cut-type-labels">
+                      <span id="outerLabel" class="${settings.cutType === 'outer' ? 'active' : ''}">Outer</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="diameter">Diameter (${distanceUnit})</label>
+                  <input type="number" id="diameter" min="0.1" step="0.1" value="${settings.diameter}" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="depth">Depth (${distanceUnit})</label>
+                  <input type="number" id="depth" min="0.1" step="0.1" value="${settings.depth}" required>
+                </div>
+                <div class="form-group">
+                </div>
+              </div>
+            </div>
+
+            <div class="form-card">
+              <div class="form-card-title">Machine Settings</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="toolDiameter">Tool Diameter (${distanceUnit})</label>
+                  <input type="number" id="toolDiameter" min="0.1" step="0.01" value="${settings.toolDiameter}" required>
+                </div>
+                <div class="form-group">
+                  <label for="pitch">Pitch (${distanceUnit})</label>
+                  <input type="number" id="pitch" min="0.1" max="10" step="0.1" value="${settings.pitch}" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="feedRate">Feed Rate (${distanceUnit}/min)</label>
+                  <input type="number" id="feedRate" min="1" step="1" value="${settings.feedRate}" required>
+                </div>
+                <div class="form-group">
+                  <label for="spindleRPM">Spindle RPM</label>
+                  <input type="number" id="spindleRPM" min="1" max="30000" step="100" value="${settings.spindleRPM}" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="spindleDelay">Spindle Delay (seconds)</label>
+                  <input type="number" id="spindleDelay" min="0" max="30" step="1" value="${settings.spindleDelay}" required>
+                </div>
+                <div class="form-group">
+                </div>
+              </div>
+
+              <div class="form-row coolant-row">
+                <div class="coolant-label">Coolant</div>
+                <div class="coolant-controls">
+                  <div class="toggle-group">
+                    <label for="mistM7">Mist</label>
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="mistM7" ${settings.mistM7 ? 'checked' : ''}>
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <div class="toggle-group">
+                    <label for="floodM8">Flood</label>
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="floodM8" ${settings.floodM8 ? 'checked' : ''}>
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="plugin-dialog-footer">
+          <div class="button-group">
+            <button type="button" class="btn btn-secondary" onclick="window.postMessage({type: 'close-plugin-dialog'}, '*')">Close</button>
+            <button type="button" class="btn btn-primary" onclick="document.getElementById('boringForm').requestSubmit()">Generate</button>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        (function() {
+          const isImperial = ${isImperial};
+
+          // Validation configuration
+          const validationRules = isImperial ? {
+            xCount: { min: 1, max: 200, label: 'X-Count', integer: true },
+            yCount: { min: 1, max: 200, label: 'Y-Count', integer: true },
+            xDistance: { min: 0.004, max: Infinity, label: 'X-Distance' },
+            yDistance: { min: 0.004, max: Infinity, label: 'Y-Distance' },
+            diameter: { min: 0.004, max: Infinity, label: 'Diameter' },
+            depth: { min: 0.004, max: Infinity, label: 'Depth' },
+            toolDiameter: { min: 0.004, max: Infinity, label: 'Tool Diameter' },
+            pitch: { min: 0.1, max: 10, label: 'Pitch' },
+            feedRate: { min: 1, max: Infinity, label: 'Feed Rate' },
+            spindleRPM: { min: 1, max: 30000, label: 'Spindle RPM', integer: true },
+            spindleDelay: { min: 0, max: 30, label: 'Spindle Delay', integer: true }
+          } : {
+            xCount: { min: 1, max: 200, label: 'X-Count', integer: true },
+            yCount: { min: 1, max: 200, label: 'Y-Count', integer: true },
+            xDistance: { min: 0.1, max: Infinity, label: 'X-Distance' },
+            yDistance: { min: 0.1, max: Infinity, label: 'Y-Distance' },
+            diameter: { min: 0.1, max: Infinity, label: 'Diameter' },
+            depth: { min: 0.1, max: Infinity, label: 'Depth' },
+            toolDiameter: { min: 0.1, max: Infinity, label: 'Tool Diameter' },
+            pitch: { min: 0.1, max: 10, label: 'Pitch' },
+            feedRate: { min: 1, max: Infinity, label: 'Feed Rate' },
+            spindleRPM: { min: 1, max: 30000, label: 'Spindle RPM', integer: true },
+            spindleDelay: { min: 0, max: 30, label: 'Spindle Delay', integer: true }
+          };
+
+          // Create tooltip element
+          const tooltip = document.createElement('div');
+          tooltip.style.cssText = \`
+            position: fixed;
+            background-color: #d32f2f;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            z-index: 10000;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+          \`;
+          tooltip.style.setProperty('white-space', 'nowrap');
+          document.body.appendChild(tooltip);
+
+          // Arrow element
+          const arrow = document.createElement('div');
+          arrow.style.cssText = \`
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 6px solid #d32f2f;
+            bottom: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+          \`;
+          tooltip.appendChild(arrow);
+
+          function showTooltip(element, message) {
+            const rect = element.getBoundingClientRect();
+            tooltip.textContent = message;
+            tooltip.appendChild(arrow); // Re-append arrow after textContent
+
+            tooltip.style.left = rect.left + (rect.width / 2) + 'px';
+            tooltip.style.top = (rect.top - 10) + 'px';
+            tooltip.style.transform = 'translate(-50%, -100%)';
+            tooltip.style.opacity = '1';
+
+            element.style.borderColor = '#d32f2f';
+            element.focus();
+          }
+
+          function hideTooltip() {
+            tooltip.style.opacity = '0';
+            setTimeout(() => {
+              tooltip.style.left = '-9999px';
+            }, 200);
+          }
+
+          function validateInput(id, value) {
+            const rules = validationRules[id];
+            if (!rules) return null;
+
+            const num = parseFloat(value);
+
+            if (isNaN(num)) {
+              return \`\${rules.label} must be a valid number\`;
+            }
+
+            if (rules.integer && !Number.isInteger(num)) {
+              return \`\${rules.label} must be a whole number\`;
+            }
+
+            if (num < rules.min) {
+              return \`\${rules.label} must be at least \${rules.min}\`;
+            }
+
+            if (num > rules.max) {
+              return \`\${rules.label} must not exceed \${rules.max}\`;
+            }
+
+            return null;
+          }
+
+          function validateAllInputs() {
+            for (const id in validationRules) {
+              const element = document.getElementById(id);
+              if (!element) continue;
+
+              const error = validateInput(id, element.value);
+              if (error) {
+                showTooltip(element, error);
+                return false;
+              }
+            }
+            return true;
+          }
+
+          // Add input listeners
+          for (const id in validationRules) {
+            const element = document.getElementById(id);
+            if (element) {
+              element.addEventListener('input', function() {
+                this.style.borderColor = '';
+                hideTooltip();
+              });
+
+              element.addEventListener('blur', function() {
+                const error = validateInput(id, this.value);
+                if (error) {
+                  showTooltip(this, error);
+                  setTimeout(hideTooltip, 3000);
+                }
+              });
+            }
+          }
+
+          function generateBoringGcode(params) {
+            const {
+              xCount, xDistance, yCount, yDistance, diameter, depth,
+              cutType, toolDiameter, pitch, feedRate, spindleRPM,
+              spindleDelay, mistM7, floodM8, isImperial
+            } = params;
+
+            const safeHeight = isImperial ? (5 * 0.0393701).toFixed(3) : '5.000';
+            const unitsCode = isImperial ? 'G20' : 'G21';
+            const unitsLabel = isImperial ? 'inch' : 'mm';
+
+            // Calculate toolpath radius
+            const holeRadius = diameter / 2;
+            const toolRadius = toolDiameter / 2;
+            let pathRadius;
+
+            if (cutType === 'inner') {
+              pathRadius = holeRadius - toolRadius;
+            } else {
+              pathRadius = holeRadius + toolRadius;
+            }
+
+            // Pitch is the Z distance per full revolution (360 degrees)
+            // No calculation needed - pitch directly equals Z increment per revolution
+            const zIncrement = pitch;
+
+            let gcode = [];
+            gcode.push('(Boring Operation)');
+            gcode.push(\`(Pattern: \${xCount} x \${yCount} holes)\`);
+            gcode.push(\`(Hole Diameter: \${diameter}\${unitsLabel}, Depth: \${depth}\${unitsLabel})\`);
+            gcode.push(\`(Cut Type: \${cutType})\`);
+            gcode.push(\`(Tool Diameter: \${toolDiameter}\${unitsLabel})\`);
+            gcode.push(\`(Pitch: \${pitch}\${unitsLabel} per revolution)\`);
+            gcode.push(\`(X-Distance: \${xDistance}\${unitsLabel}, Y-Distance: \${yDistance}\${unitsLabel})\`);
+            gcode.push('');
+            gcode.push(\`\${unitsCode} ; \${isImperial ? 'Imperial' : 'Metric'} units\`);
+            gcode.push('G17 ; XY plane selection');
+            gcode.push('G90 ; Absolute positioning');
+            gcode.push('G94 ; Feed rate per minute');
+            gcode.push('');
+            gcode.push('G53 G0 Z0 ; Move to machine Z0');
+            gcode.push('');
+
+            // Generate holes in grid pattern
+            let holeNumber = 0;
+            for (let yi = 0; yi < yCount; yi++) {
+              for (let xi = 0; xi < xCount; xi++) {
+                holeNumber++;
+                const holeX = xi * xDistance;
+                const holeY = yi * yDistance;
+
+                gcode.push(\`(Hole \${holeNumber}/\${xCount * yCount} at X\${holeX.toFixed(3)} Y\${holeY.toFixed(3)})\`);
+
+                // Start coolant and spindle (if first hole)
+                if (holeNumber === 1) {
+                  if (mistM7) {
+                    gcode.push('M7 ; Mist coolant on');
+                  }
+                  if (floodM8) {
+                    gcode.push('M8 ; Flood coolant on');
+                  }
+                  if (spindleRPM > 0) {
+                    gcode.push(\`M3 S\${spindleRPM} ; Start spindle\`);
+                    if (spindleDelay > 0) {
+                      gcode.push(\`G4 P\${spindleDelay} ; Wait \${spindleDelay} seconds\`);
+                    }
+                  }
+                }
+
+                // Calculate lead-in start position (like Fusion: below center, slightly inside radius)
+                const leadInOffset = pathRadius * 0.05; // Start 5% inside radius
+                const startY = holeY - (pathRadius * 0.05); // Start below center
+                const startX = holeX + pathRadius - leadInOffset;
+
+                // Move to start position
+                gcode.push(\`G0 X\${startX.toFixed(3)} Y\${startY.toFixed(3)}\`);
+                gcode.push(\`G0 Z\${safeHeight}\`);
+
+                // Rapid to clearance height
+                const clearanceHeight = isImperial ? '0.039' : '1.0';
+                gcode.push(\`G0 Z\${clearanceHeight}\`);
+
+                // Slow plunge to starting depth
+                const startDepth = zIncrement * 0.5;
+                gcode.push(\`G1 Z\${(-startDepth).toFixed(3)} F\${Math.round(feedRate * 0.5)}\`);
+
+                // Lead-in ramp moves toward edge (like Fusion 360)
+                const leadInSteps = 7;
+                for (let step = 1; step <= leadInSteps; step++) {
+                  const progress = step / leadInSteps;
+                  const xPos = startX + (leadInOffset * progress);
+                  const zPos = -startDepth - (zIncrement * 0.5 * progress);
+                  gcode.push(\`X\${xPos.toFixed(3)} Z\${zPos.toFixed(3)}\`);
+                }
+
+                // Quarter-circle arc to transition onto boring circle (KEY FIX!)
+                // Arc from current position to edge at Y=holeY
+                const arcCenterY = holeY - startY; // J value relative to current position
+                gcode.push(\`G3 X\${(holeX + pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I0 J\${arcCenterY.toFixed(3)} F\${feedRate}\`);
+
+                // Helical boring using semicircles (like Fusion 360)
+                // Alternating between +X and -X sides of the hole
+                const zIncrementPerSemicircle = zIncrement / 2;
+                const numberOfSemicircles = Math.ceil(depth / zIncrementPerSemicircle);
+
+                // Do helical passes down to depth using alternating semicircles
+                for (let i = 0; i < numberOfSemicircles; i++) {
+                  const targetZ = -Math.min((i + 1) * zIncrementPerSemicircle, depth);
+
+                  if (i % 2 === 0) {
+                    // Arc from +X to -X (semicircle going left)
+                    gcode.push(\`G3 X\${(holeX - pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${(-pathRadius).toFixed(3)} J0 Z\${targetZ.toFixed(3)} F\${feedRate}\`);
+                  } else {
+                    // Arc from -X to +X (semicircle going right)
+                    gcode.push(\`G3 X\${(holeX + pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${pathRadius.toFixed(3)} J0 Z\${targetZ.toFixed(3)} F\${feedRate}\`);
+                  }
+                }
+
+                // Final cleanup passes at full depth (two semicircles = full circle)
+                gcode.push(\`G3 X\${(holeX - pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${(-pathRadius).toFixed(3)} J0 F\${feedRate}\`);
+                gcode.push(\`G3 X\${(holeX + pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${pathRadius.toFixed(3)} J0 F\${feedRate}\`);
+
+                // Retract
+                gcode.push(\`G0 Z\${safeHeight}\`);
+                gcode.push('');
+              }
+            }
+
+            gcode.push('G53 G0 Z0 ; Return to machine Z0');
+            if (mistM7 || floodM8) {
+              gcode.push('M9 ; Coolant off');
+            }
+            if (spindleRPM > 0) {
+              gcode.push('M5 ; Stop spindle');
+            }
+            gcode.push('M30 ; Program end');
+
+            return gcode.join('\\n');
+          }
+
+          // Handle cut type toggle
+          const cutTypeToggle = document.getElementById('cutType');
+          const innerLabel = document.getElementById('innerLabel');
+          const outerLabel = document.getElementById('outerLabel');
+
+          function updateCutTypeLabels() {
+            if (cutTypeToggle.checked) {
+              innerLabel.classList.remove('active');
+              outerLabel.classList.add('active');
+            } else {
+              innerLabel.classList.add('active');
+              outerLabel.classList.remove('active');
+            }
+          }
+
+          cutTypeToggle.addEventListener('change', updateCutTypeLabels);
+
+          // Handle X-Count and Y-Count changes to enable/disable distance inputs
+          const xCountInput = document.getElementById('xCount');
+          const xDistanceInput = document.getElementById('xDistance');
+          const yCountInput = document.getElementById('yCount');
+          const yDistanceInput = document.getElementById('yDistance');
+
+          function updateDistanceInputs() {
+            xDistanceInput.disabled = parseInt(xCountInput.value) <= 1;
+            yDistanceInput.disabled = parseInt(yCountInput.value) <= 1;
+          }
+
+          xCountInput.addEventListener('input', updateDistanceInputs);
+          yCountInput.addEventListener('input', updateDistanceInputs);
+
+          // Initialize on load
+          updateDistanceInputs();
+
+          document.getElementById('boringForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Validate all inputs
+            if (!validateAllInputs()) {
+              return;
+            }
+
+            // Get form values
+            const xCount = parseInt(document.getElementById('xCount').value);
+            const xDistance = parseFloat(document.getElementById('xDistance').value);
+            const yCount = parseInt(document.getElementById('yCount').value);
+            const yDistance = parseFloat(document.getElementById('yDistance').value);
+            const diameter = parseFloat(document.getElementById('diameter').value);
+            const depth = parseFloat(document.getElementById('depth').value);
+            const cutType = cutTypeToggle.checked ? 'outer' : 'inner';
+            const toolDiameter = parseFloat(document.getElementById('toolDiameter').value);
+            const pitch = parseFloat(document.getElementById('pitch').value);
+            const feedRate = parseFloat(document.getElementById('feedRate').value);
+            const spindleRPM = parseInt(document.getElementById('spindleRPM').value);
+            const spindleDelay = parseInt(document.getElementById('spindleDelay').value);
+            const mistM7 = document.getElementById('mistM7').checked;
+            const floodM8 = document.getElementById('floodM8').checked;
+
+            const displayValues = {
+              xCount,
+              xDistance,
+              yCount,
+              yDistance,
+              diameter,
+              depth,
+              cutType,
+              toolDiameter,
+              pitch,
+              feedRate,
+              spindleRPM,
+              spindleDelay,
+              mistM7,
+              floodM8
+            };
+
+            // Convert to metric for storage
+            const convertToMetric = (value) => isImperial ? value * 25.4 : value;
+
+            const settingsToSave = {
+              boring: {
+                xCount: displayValues.xCount,
+                xDistance: convertToMetric(displayValues.xDistance),
+                yCount: displayValues.yCount,
+                yDistance: convertToMetric(displayValues.yDistance),
+                diameter: convertToMetric(displayValues.diameter),
+                depth: convertToMetric(displayValues.depth),
+                cutType: displayValues.cutType,
+                toolDiameter: convertToMetric(displayValues.toolDiameter),
+                pitch: convertToMetric(displayValues.pitch),
+                feedRate: convertToMetric(displayValues.feedRate),
+                spindleRPM: displayValues.spindleRPM,
+                spindleDelay: displayValues.spindleDelay,
+                mistM7: displayValues.mistM7,
+                floodM8: displayValues.floodM8
+              }
+            };
+
+            // Generate G-code
+            const gcodeParams = {
+              xCount: displayValues.xCount,
+              xDistance: displayValues.xDistance,
+              yCount: displayValues.yCount,
+              yDistance: displayValues.yDistance,
+              diameter: displayValues.diameter,
+              depth: displayValues.depth,
+              cutType: displayValues.cutType,
+              toolDiameter: displayValues.toolDiameter,
+              pitch: displayValues.pitch,
+              feedRate: displayValues.feedRate,
+              spindleRPM: displayValues.spindleRPM,
+              spindleDelay: displayValues.spindleDelay,
+              mistM7: displayValues.mistM7,
+              floodM8: displayValues.floodM8,
+              isImperial
+            };
+
+            const gcode = generateBoringGcode(gcodeParams);
+
+            // Save settings
+            fetch('/api/plugins/com.ncsender.toolbench/settings', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(settingsToSave)
+            }).catch(err => console.error('Failed to save settings:', err));
+
+            // Upload file
+            const formData = new FormData();
+            const blob = new Blob([gcode], { type: 'text/plain' });
+            formData.append('file', blob, 'Boring.nc');
+
+            try {
+              const uploadResponse = await fetch('/api/gcode-files', {
+                method: 'POST',
+                body: formData
+              });
+
+              if (uploadResponse.ok) {
+                window.postMessage({ type: 'close-plugin-dialog' }, '*');
+              } else {
+                alert('Failed to upload G-code file');
+              }
+            } catch (error) {
+              console.error('Upload error:', error);
+              alert('Error uploading G-code file');
             }
           });
         })();

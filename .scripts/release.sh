@@ -93,7 +93,7 @@ echo "Generating release notes using Claude..."
 echo ""
 
 # Create a prompt for Claude
-PROMPT="Based on the following git commit messages from $LATEST_TAG to HEAD, generate user-focused release notes for version $NEW_VERSION of the Surfacing & Jointer plugin.
+PROMPT="Based on the following git commit messages from $LATEST_TAG to HEAD, generate user-focused release notes for version $NEW_VERSION of the ToolBench plugin.
 
 Commit messages:
 $COMMITS

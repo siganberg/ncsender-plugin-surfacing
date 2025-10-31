@@ -1,10 +1,10 @@
 {
-  "id": "com.ncsender.surfacing",
-  "name": "Surfacing & Jointer",
+  "id": "com.ncsender.toolbench",
+  "name": "ToolBench",
   "version": "0.1.1",
   "minAppVersion": "0.3.11",
   "author": "ncSender",
-  "description": "Generates G-code for surfacing operations (fly-cutting)",
+  "description": "Collection of CNC tooling utilities including surfacing, jointer/cutter, and boring operations",
   "entry": "index.js",
   "icon": "icon.svg",
   "category": "gcode-generator",
