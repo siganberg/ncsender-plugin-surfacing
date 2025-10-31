@@ -2067,9 +2067,14 @@ export async function onLoad(ctx) {
                 }
 
                 // Calculate lead-in start position (like Fusion: below center, slightly inside radius)
-                const leadInOffset = pathRadius * 0.05; // Start 5% inside radius
-                const startY = holeY - (pathRadius * 0.05); // Start below center
-                const startX = holeX + pathRadius - leadInOffset;
+                const minEntryOffset = isImperial ? 0.005 : 0.1;
+                const entryOffsetCandidate = Math.max(pathRadius * 0.0125, toolRadius * 0.25, minEntryOffset);
+                const entryOffset = Math.min(pathRadius * 0.05, entryOffsetCandidate, pathRadius * 0.5);
+                const approachStartOffset = Math.max(entryOffset, Math.min(pathRadius * 0.8, entryOffset * 2.5));
+                const startX = holeX + pathRadius - approachStartOffset;
+                const arcStartX = holeX + pathRadius - entryOffset;
+                const startY = holeY - entryOffset; // Start below center
+                const rampXTravel = Math.max(arcStartX - startX, 0);
 
                 // Move to start position
                 gcode.push(\`G0 X\${startX.toFixed(3)} Y\${startY.toFixed(3)}\`);
@@ -2079,40 +2084,48 @@ export async function onLoad(ctx) {
                 const clearanceHeight = isImperial ? '0.039' : '1.0';
                 gcode.push(\`G0 Z\${clearanceHeight}\`);
 
-                // Slow plunge to starting depth
-                const startDepth = zIncrement * 0.5;
-                gcode.push(\`G1 Z\${(-startDepth).toFixed(3)} F\${Math.round(feedRate * 0.5)}\`);
+                // Slow plunge to starting depth (clamped to requested depth)
+                const startDepth = Math.min(depth, zIncrement * 0.5);
+                const rampTargetDepth = Math.min(depth, zIncrement);
+                const rampDepthDiff = Math.max(0, rampTargetDepth - startDepth);
+                const plungeFeed = Math.max(1, Math.round(feedRate * 0.5));
+                gcode.push(\`G1 Z\${(-startDepth).toFixed(3)} F\${plungeFeed}\`);
 
                 // Lead-in ramp moves toward edge (like Fusion 360)
                 const leadInSteps = 7;
                 for (let step = 1; step <= leadInSteps; step++) {
                   const progress = step / leadInSteps;
-                  const xPos = startX + (leadInOffset * progress);
-                  const zPos = -startDepth - (zIncrement * 0.5 * progress);
+                  const xPos = startX + (rampXTravel * progress);
+                  const zPos = -(startDepth + (rampDepthDiff * progress));
                   gcode.push(\`X\${xPos.toFixed(3)} Z\${zPos.toFixed(3)}\`);
                 }
 
                 // Quarter-circle arc to transition onto boring circle (KEY FIX!)
                 // Arc from current position to edge at Y=holeY
-                const arcCenterY = holeY - startY; // J value relative to current position
-                gcode.push(\`G3 X\${(holeX + pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I0 J\${arcCenterY.toFixed(3)} F\${feedRate}\`);
+                const arcCenterYOffset = entryOffset; // J value relative to current position
+                gcode.push(\`G3 X\${(holeX + pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I0 J\${arcCenterYOffset.toFixed(3)} F\${feedRate}\`);
 
                 // Helical boring using semicircles (like Fusion 360)
                 // Alternating between +X and -X sides of the hole
                 const zIncrementPerSemicircle = zIncrement / 2;
-                const numberOfSemicircles = Math.ceil(depth / zIncrementPerSemicircle);
+                let currentDepth = rampTargetDepth;
+                let semicircleIndex = 0;
+                const depthTolerance = 1e-6;
 
                 // Do helical passes down to depth using alternating semicircles
-                for (let i = 0; i < numberOfSemicircles; i++) {
-                  const targetZ = -Math.min((i + 1) * zIncrementPerSemicircle, depth);
+                while (currentDepth < depth - depthTolerance) {
+                  const nextDepth = Math.min(depth, currentDepth + zIncrementPerSemicircle);
 
-                  if (i % 2 === 0) {
+                  if (semicircleIndex % 2 === 0) {
                     // Arc from +X to -X (semicircle going left)
-                    gcode.push(\`G3 X\${(holeX - pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${(-pathRadius).toFixed(3)} J0 Z\${targetZ.toFixed(3)} F\${feedRate}\`);
+                    gcode.push(\`G3 X\${(holeX - pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${(-pathRadius).toFixed(3)} J0 Z\${(-nextDepth).toFixed(3)} F\${feedRate}\`);
                   } else {
                     // Arc from -X to +X (semicircle going right)
-                    gcode.push(\`G3 X\${(holeX + pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${pathRadius.toFixed(3)} J0 Z\${targetZ.toFixed(3)} F\${feedRate}\`);
+                    gcode.push(\`G3 X\${(holeX + pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${pathRadius.toFixed(3)} J0 Z\${(-nextDepth).toFixed(3)} F\${feedRate}\`);
                   }
+
+                  currentDepth = nextDepth;
+                  semicircleIndex++;
                 }
 
                 // Final cleanup passes at full depth (two semicircles = full circle)
