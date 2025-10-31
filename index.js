@@ -767,9 +767,9 @@ export async function onLoad(ctx) {
     `);
   }, { clientOnly: true }); // Only show to the client who clicked
 
-  // Register the Jointer tool in the Tools menu (client-only dialogs)
-  ctx.registerToolMenu('Jointer', async () => {
-    ctx.log('Jointer tool clicked');
+  // Register the Jointer/Cutter tool in the Tools menu (client-only dialogs)
+  ctx.registerToolMenu('Jointer/Cutter', async () => {
+    ctx.log('Jointer/Cutter tool clicked');
 
     // Get app settings to determine units
     const appSettings = ctx.getAppSettings();
@@ -805,7 +805,7 @@ export async function onLoad(ctx) {
       spindleDelay: savedJointerSettings.spindleDelay ?? false
     };
 
-    ctx.showDialog('Jointer Operation', `
+    ctx.showDialog('Jointer/Cutter Operation', `
       <style>
         .jointer-layout {
           display: flex;
@@ -1102,7 +1102,7 @@ export async function onLoad(ctx) {
             spindleRpm: { min: 1000, max: 24000, label: 'Spindle RPM' }
           } : {
             edgeLength: { min: 10, max: 5000, label: 'Edge Length' },
-            depthOfCut: { min: 1, max: 100, label: 'Depth of Cut' },
+            depthOfCut: { min: 0.1, max: 100, label: 'Depth of Cut' },
             materialThickness: { min: 1, max: 100, label: 'Material Thickness' },
             trimWidth: { min: 0.1, max: 5, label: 'Trim Width' },
             numberOfPasses: { min: 1, max: 5, label: 'Number of Passes', integer: true },
