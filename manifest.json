@@ -1,7 +1,7 @@
 {
   "id": "com.ncsender.surfacing",
   "name": "Surfacing & Jointer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "0.3.11",
   "author": "ncSender",
   "description": "Generates G-code for surfacing operations (fly-cutting)",

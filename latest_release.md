@@ -1,9 +1,8 @@
 ## What's Changed
 
-### ✨ New Features
-- Initial release of the Surfacing & Jointer plugin for ncSender
-- Automated toolpath generation for surfacing operations
-- Support for jointing edges and faces
-
 ### 🔧 Improvements
-- Requires ncSender v0.3.0 or higher for enhanced plugin compatibility
+- Renamed "Jointer" to "Jointer/Cutter" for better clarity
+- Set minimum depth of cut to 0.1mm for improved precision
+
+### 📝 Documentation
+- Added disclaimer to README
