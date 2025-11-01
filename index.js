@@ -1737,28 +1737,6 @@ export async function onLoad(ctx) {
                 <div class="form-card-title">Dimensions</div>
               <div class="form-row">
                 <div class="form-group">
-                  <label for="xCount">X-Count</label>
-                  <input type="number" id="xCount" min="1" max="200" step="1" value="${settings.xCount}" required>
-                </div>
-                <div class="form-group">
-                  <label for="xDistance">X-Distance (${distanceUnit})</label>
-                  <input type="number" id="xDistance" min="0.1" step="0.1" value="${settings.xDistance}" required>
-                </div>
-              </div>
-
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="yCount">Y-Count</label>
-                  <input type="number" id="yCount" min="1" max="200" step="1" value="${settings.yCount}" required>
-                </div>
-                <div class="form-group">
-                  <label for="yDistance">Y-Distance (${distanceUnit})</label>
-                  <input type="number" id="yDistance" min="0.1" step="0.1" value="${settings.yDistance}" required>
-                </div>
-              </div>
-
-              <div class="form-row">
-                <div class="form-group">
                   <label class="cut-type-label">Cut</label>
                   <div class="cut-type-toggle">
                     <div class="cut-type-labels">
@@ -1781,10 +1759,34 @@ export async function onLoad(ctx) {
 
               <div class="form-row">
                 <div class="form-group">
+                  <label for="xCount">X-Count</label>
+                  <input type="number" id="xCount" min="1" max="200" step="1" value="${settings.xCount}" required>
+                </div>
+                <div class="form-group">
+                  <label for="xDistance">X-Distance (${distanceUnit})</label>
+                  <input type="number" id="xDistance" min="0.1" step="0.1" value="${settings.xDistance}" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="yCount">Y-Count</label>
+                  <input type="number" id="yCount" min="1" max="200" step="1" value="${settings.yCount}" required>
+                </div>
+                <div class="form-group">
+                  <label for="yDistance">Y-Distance (${distanceUnit})</label>
+                  <input type="number" id="yDistance" min="0.1" step="0.1" value="${settings.yDistance}" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
                   <label for="depth">Depth (${distanceUnit})</label>
                   <input type="number" id="depth" min="0.1" step="0.1" value="${settings.depth}" required>
                 </div>
                 <div class="form-group">
+                  <label for="pitch">Pitch (${distanceUnit})</label>
+                  <input type="number" id="pitch" min="0.1" max="10" step="0.1" value="${settings.pitch}" required>
                 </div>
               </div>
             </div>
@@ -1797,8 +1799,6 @@ export async function onLoad(ctx) {
                   <input type="number" id="toolDiameter" min="0.1" step="0.01" value="${settings.toolDiameter}" required>
                 </div>
                 <div class="form-group">
-                  <label for="pitch">Pitch (${distanceUnit})</label>
-                  <input type="number" id="pitch" min="0.1" max="10" step="0.1" value="${settings.pitch}" required>
                 </div>
               </div>
 
@@ -1809,7 +1809,7 @@ export async function onLoad(ctx) {
                 </div>
                 <div class="form-group">
                   <label for="spindleRPM">Spindle RPM</label>
-                  <input type="number" id="spindleRPM" min="1" max="30000" step="100" value="${settings.spindleRPM}" required>
+                  <input type="number" id="spindleRPM" min="1" max="24000" step="100" value="${settings.spindleRPM}" required>
                 </div>
               </div>
 
@@ -1869,7 +1869,7 @@ export async function onLoad(ctx) {
             toolDiameter: { min: 0.004, max: Infinity, label: 'Tool Diameter' },
             pitch: { min: 0.1, max: 10, label: 'Pitch' },
             feedRate: { min: 1, max: Infinity, label: 'Feed Rate' },
-            spindleRPM: { min: 1, max: 30000, label: 'Spindle RPM', integer: true },
+            spindleRPM: { min: 1, max: 24000, label: 'Spindle RPM', integer: true },
             spindleDelay: { min: 0, max: 30, label: 'Spindle Delay', integer: true }
           } : {
             xCount: { min: 1, max: 200, label: 'X-Count', integer: true },
@@ -1881,7 +1881,7 @@ export async function onLoad(ctx) {
             toolDiameter: { min: 0.1, max: Infinity, label: 'Tool Diameter' },
             pitch: { min: 0.1, max: 10, label: 'Pitch' },
             feedRate: { min: 1, max: Infinity, label: 'Feed Rate' },
-            spindleRPM: { min: 1, max: 30000, label: 'Spindle RPM', integer: true },
+            spindleRPM: { min: 1, max: 24000, label: 'Spindle RPM', integer: true },
             spindleDelay: { min: 0, max: 30, label: 'Spindle Delay', integer: true }
           };
 
@@ -1961,6 +1961,17 @@ export async function onLoad(ctx) {
               return \`\${rules.label} must not exceed \${rules.max}\`;
             }
 
+            // Special validation: xDistance and yDistance must be >= diameter
+            if (id === 'xDistance' || id === 'yDistance') {
+              const diameterInput = document.getElementById('diameter');
+              if (diameterInput) {
+                const diameter = parseFloat(diameterInput.value);
+                if (!isNaN(diameter) && num < diameter) {
+                  return \`\${rules.label} must be at least the Diameter (\${diameter})\`;
+                }
+              }
+            }
+
             return null;
           }
 
@@ -1995,6 +2006,23 @@ export async function onLoad(ctx) {
                 }
               });
             }
+          }
+
+          // When diameter changes, re-validate xDistance and yDistance
+          const diameterInput = document.getElementById('diameter');
+          if (diameterInput) {
+            diameterInput.addEventListener('input', function() {
+              const xDistanceInput = document.getElementById('xDistance');
+              const yDistanceInput = document.getElementById('yDistance');
+
+              if (xDistanceInput) {
+                xDistanceInput.style.borderColor = '';
+              }
+              if (yDistanceInput) {
+                yDistanceInput.style.borderColor = '';
+              }
+              hideTooltip();
+            });
           }
 
           function generateBoringGcode(params) {
@@ -2174,12 +2202,35 @@ export async function onLoad(ctx) {
           const yDistanceInput = document.getElementById('yDistance');
 
           function updateDistanceInputs() {
-            xDistanceInput.disabled = parseInt(xCountInput.value) <= 1;
-            yDistanceInput.disabled = parseInt(yCountInput.value) <= 1;
+            const xCount = parseInt(xCountInput.value);
+            const yCount = parseInt(yCountInput.value);
+            const diameter = parseFloat(diameterInput.value);
+
+            // Enable/disable distance inputs
+            xDistanceInput.disabled = xCount <= 1;
+            yDistanceInput.disabled = yCount <= 1;
+
+            // Auto-set distance to diameter if count > 1 and distance < diameter
+            if (xCount > 1 && !isNaN(diameter)) {
+              const xDistance = parseFloat(xDistanceInput.value);
+              if (isNaN(xDistance) || xDistance < diameter) {
+                xDistanceInput.value = diameter;
+              }
+            }
+
+            if (yCount > 1 && !isNaN(diameter)) {
+              const yDistance = parseFloat(yDistanceInput.value);
+              if (isNaN(yDistance) || yDistance < diameter) {
+                yDistanceInput.value = diameter;
+              }
+            }
           }
 
           xCountInput.addEventListener('input', updateDistanceInputs);
           yCountInput.addEventListener('input', updateDistanceInputs);
+
+          // Also update when diameter changes
+          diameterInput.addEventListener('input', updateDistanceInputs);
 
           // Initialize on load
           updateDistanceInputs();
