@@ -2159,6 +2159,7 @@ export async function onLoad(ctx) {
                 let currentDepth = rampTargetDepth;
                 const depthTolerance = 1e-6;
                 const zIncrementPerSemicircle = zIncrement / 2;
+                let atPlusX = true; // Track current position (start at +X after quarter-circle)
 
                 // Do helical passes down to depth using two semicircles per revolution
                 while (currentDepth < depth - depthTolerance) {
@@ -2166,6 +2167,7 @@ export async function onLoad(ctx) {
                   const firstHalfDepth = Math.min(depth, currentDepth + zIncrementPerSemicircle);
                   gcode.push(\`G3 X\${(holeX - pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${(-pathRadius).toFixed(3)} J0 Z\${(-firstHalfDepth).toFixed(3)} F\${feedRate}\`);
                   currentDepth = firstHalfDepth;
+                  atPlusX = false;
 
                   if (currentDepth >= depth - depthTolerance) break;
 
@@ -2173,11 +2175,19 @@ export async function onLoad(ctx) {
                   const secondHalfDepth = Math.min(depth, currentDepth + zIncrementPerSemicircle);
                   gcode.push(\`G3 X\${(holeX + pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${pathRadius.toFixed(3)} J0 Z\${(-secondHalfDepth).toFixed(3)} F\${feedRate}\`);
                   currentDepth = secondHalfDepth;
+                  atPlusX = true;
                 }
 
-                // Final cleanup pass at full depth (two semicircles = one full circle)
-                gcode.push(\`G3 X\${(holeX - pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${(-pathRadius).toFixed(3)} J0 F\${feedRate}\`);
-                gcode.push(\`G3 X\${(holeX + pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${pathRadius.toFixed(3)} J0 F\${feedRate}\`);
+                // Final cleanup pass at full depth (one full circle from current position)
+                if (atPlusX) {
+                  // At +X, do full circle: +X to -X to +X
+                  gcode.push(\`G3 X\${(holeX - pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${(-pathRadius).toFixed(3)} J0 F\${feedRate}\`);
+                  gcode.push(\`G3 X\${(holeX + pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${pathRadius.toFixed(3)} J0 F\${feedRate}\`);
+                } else {
+                  // At -X, do full circle: -X to +X to -X
+                  gcode.push(\`G3 X\${(holeX + pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${pathRadius.toFixed(3)} J0 F\${feedRate}\`);
+                  gcode.push(\`G3 X\${(holeX - pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${(-pathRadius).toFixed(3)} J0 F\${feedRate}\`);
+                }
 
                 // Retract
                 gcode.push(\`G0 Z\${safeHeight}\`);
