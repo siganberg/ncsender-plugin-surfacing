@@ -2155,30 +2155,27 @@ export async function onLoad(ctx) {
                 const arcCenterYOffset = entryOffset; // J value relative to current position
                 gcode.push(\`G3 X\${(holeX + pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I0 J\${arcCenterYOffset.toFixed(3)} F\${feedRate}\`);
 
-                // Helical boring using semicircles (like Fusion 360)
-                // Alternating between +X and -X sides of the hole
-                const zIncrementPerSemicircle = zIncrement / 2;
+                // Helical boring using two semicircles per revolution
                 let currentDepth = rampTargetDepth;
-                let semicircleIndex = 0;
                 const depthTolerance = 1e-6;
+                const zIncrementPerSemicircle = zIncrement / 2;
 
-                // Do helical passes down to depth using alternating semicircles
+                // Do helical passes down to depth using two semicircles per revolution
                 while (currentDepth < depth - depthTolerance) {
-                  const nextDepth = Math.min(depth, currentDepth + zIncrementPerSemicircle);
+                  // First semicircle: +X to -X (top half, CCW)
+                  const firstHalfDepth = Math.min(depth, currentDepth + zIncrementPerSemicircle);
+                  gcode.push(\`G3 X\${(holeX - pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${(-pathRadius).toFixed(3)} J0 Z\${(-firstHalfDepth).toFixed(3)} F\${feedRate}\`);
+                  currentDepth = firstHalfDepth;
 
-                  if (semicircleIndex % 2 === 0) {
-                    // Arc from +X to -X (semicircle going left)
-                    gcode.push(\`G3 X\${(holeX - pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${(-pathRadius).toFixed(3)} J0 Z\${(-nextDepth).toFixed(3)} F\${feedRate}\`);
-                  } else {
-                    // Arc from -X to +X (semicircle going right)
-                    gcode.push(\`G3 X\${(holeX + pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${pathRadius.toFixed(3)} J0 Z\${(-nextDepth).toFixed(3)} F\${feedRate}\`);
-                  }
+                  if (currentDepth >= depth - depthTolerance) break;
 
-                  currentDepth = nextDepth;
-                  semicircleIndex++;
+                  // Second semicircle: -X to +X (bottom half, CCW)
+                  const secondHalfDepth = Math.min(depth, currentDepth + zIncrementPerSemicircle);
+                  gcode.push(\`G3 X\${(holeX + pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${pathRadius.toFixed(3)} J0 Z\${(-secondHalfDepth).toFixed(3)} F\${feedRate}\`);
+                  currentDepth = secondHalfDepth;
                 }
 
-                // Final cleanup passes at full depth (two semicircles = full circle)
+                // Final cleanup pass at full depth (two semicircles = one full circle)
                 gcode.push(\`G3 X\${(holeX - pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${(-pathRadius).toFixed(3)} J0 F\${feedRate}\`);
                 gcode.push(\`G3 X\${(holeX + pathRadius).toFixed(3)} Y\${holeY.toFixed(3)} I\${pathRadius.toFixed(3)} J0 F\${feedRate}\`);
 
