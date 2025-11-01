@@ -8,6 +8,7 @@
   "entry": "index.js",
   "icon": "icon.svg",
   "category": "gcode-generator",
+  "repository": "https://github.com/siganberg/ncsender-plugin-toolbench",
   "events": [],
   "permissions": ["gcode.modify"]
 }
