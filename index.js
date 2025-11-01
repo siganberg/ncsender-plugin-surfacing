@@ -1972,6 +1972,17 @@ export async function onLoad(ctx) {
               }
             }
 
+            // Special validation: diameter must be >= toolDiameter
+            if (id === 'diameter') {
+              const toolDiameterInput = document.getElementById('toolDiameter');
+              if (toolDiameterInput) {
+                const toolDiameter = parseFloat(toolDiameterInput.value);
+                if (!isNaN(toolDiameter) && num < toolDiameter) {
+                  return \`\${rules.label} must be at least the Tool Diameter (\${toolDiameter})\`;
+                }
+              }
+            }
+
             return null;
           }
 
@@ -2020,6 +2031,17 @@ export async function onLoad(ctx) {
               }
               if (yDistanceInput) {
                 yDistanceInput.style.borderColor = '';
+              }
+              hideTooltip();
+            });
+          }
+
+          // When toolDiameter changes, clear diameter validation error
+          const toolDiameterInput = document.getElementById('toolDiameter');
+          if (toolDiameterInput) {
+            toolDiameterInput.addEventListener('input', function() {
+              if (diameterInput) {
+                diameterInput.style.borderColor = '';
               }
               hideTooltip();
             });
@@ -2108,15 +2130,15 @@ export async function onLoad(ctx) {
                 gcode.push(\`G0 X\${startX.toFixed(3)} Y\${startY.toFixed(3)}\`);
                 gcode.push(\`G0 Z\${safeHeight}\`);
 
-                // Rapid to clearance height
-                const clearanceHeight = isImperial ? '0.039' : '1.0';
-                gcode.push(\`G0 Z\${clearanceHeight}\`);
+                // Rapid to 2mm above starting point
+                const slowPlungeStart = isImperial ? (2 * 0.0393701) : 2;
+                gcode.push(\`G0 Z\${slowPlungeStart.toFixed(3)}\`);
 
-                // Slow plunge to starting depth (clamped to requested depth)
+                // Slow plunge at 200 mm/min to starting depth (clamped to requested depth)
                 const startDepth = Math.min(depth, zIncrement * 0.5);
                 const rampTargetDepth = Math.min(depth, zIncrement);
                 const rampDepthDiff = Math.max(0, rampTargetDepth - startDepth);
-                const plungeFeed = Math.max(1, Math.round(feedRate * 0.5));
+                const plungeFeed = isImperial ? Math.round(200 * 0.0393701) : 200;
                 gcode.push(\`G1 Z\${(-startDepth).toFixed(3)} F\${plungeFeed}\`);
 
                 // Lead-in ramp moves toward edge (like Fusion 360)
