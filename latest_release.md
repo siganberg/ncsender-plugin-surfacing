@@ -1,4 +1,4 @@
 ## What's Changed
 
 ### 🐛 Bug Fixes
-- Fixed helical boring G-code generation to prevent unintended figure-8 movement patterns
+- Fixed cleanup pass positioning to prevent figure-8 movement at certain depths
