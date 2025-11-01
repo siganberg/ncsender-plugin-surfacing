@@ -1,8 +1,8 @@
 ## What's Changed
 
-### 🔧 Improvements
-- Renamed "Jointer" to "Jointer/Cutter" for better clarity
-- Set minimum depth of cut to 0.1mm for improved precision
+### 🐛 Bug Fixes
+- Fixed G-code generation issues
 
-### 📝 Documentation
-- Added disclaimer to README
+### 🔧 Improvements
+- Enhanced Boring tool with improved Z-axis plunge and diameter validation
+- Improved Boring tool form layout and validation for better usability
